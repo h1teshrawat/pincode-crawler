@@ -162,6 +162,11 @@
       return escapeHtml(value);
     }
 
+    function normalizeUrl(url) {
+      if (!url) return null;
+      return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true;
@@ -197,19 +202,30 @@
         resultsSubtitle.textContent = data.area ? `near ${data.area}` : '';
         downloadBtn.href = `/download/${data.download_id}`;
 
-        resultsBody.innerHTML = data.rows.map(r => `
+        resultsBody.innerHTML = data.rows.map(r => {
+          const site = normalizeUrl(r.website);
+          let siteLabel = '';
+          if (site) {
+            try {
+              siteLabel = new URL(site).hostname.replace(/^www\./, '');
+            } catch {
+              siteLabel = r.website;
+            }
+          }
+          return `
           <tr>
             <td class="col-name">
               ${escapeHtml(r.name)}
               ${r.category ? `<span class="tag">${escapeHtml(r.category.split(',')[0])}</span>` : ''}
             </td>
             <td>${cell(r.phone, { href: r.phone ? `tel:${r.phone.replace(/\s+/g, '')}` : null })}</td>
-            <td>${cell(r.website, { href: r.website, label: r.website ? new URL(r.website).hostname.replace(/^www\./, '') : '' })}</td>
+            <td>${cell(r.website, { href: site, label: siteLabel })}</td>
             <td>${cell(r.instagram, { href: r.instagram ? `https://instagram.com/${r.instagram}` : null, label: r.instagram ? '@' + r.instagram : '' })}</td>
             <td class="col-address">${escapeHtml(r.address)}</td>
             <td>${r.distance !== '' ? r.distance + ' m' : '<span class="muted">—</span>'}</td>
           </tr>
-        `).join('') || `<tr><td colspan="6" class="muted center">No businesses matched — try a broader term or larger radius.</td></tr>`;
+        `;
+        }).join('') || `<tr><td colspan="6" class="muted center">No businesses matched — try a broader term or larger radius.</td></tr>`;
       } catch (err) {
         errorEl.textContent = 'Network error: ' + err.message;
         errorEl.hidden = false;
