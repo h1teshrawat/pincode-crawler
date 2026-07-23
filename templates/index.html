@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pincode Crawler — local business finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+  </div>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 6.6 11.19 7.03 11.57.28.25.66.25.94 0C12.4 21.19 19 15.25 19 10c0-4.42-3.58-8-8-8Z" fill="url(#pin-grad)"/>
+            <circle cx="12" cy="10" r="3.3" fill="white" fill-opacity="0.92"/>
+            <defs>
+              <linearGradient id="pin-grad" x1="4" y1="2" x2="19" y2="21" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#8b5cf6"/>
+                <stop offset="1" stop-color="#ec4899"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span class="brand-name">Pincode Crawler</span>
+      </div>
+      <p class="tagline">Find any type of local business near a pincode — export it straight to Excel.</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel form-panel">
+        <form id="search-form">
+          <div class="field">
+            <label for="query">Business type</label>
+            <input type="text" id="query" name="query" placeholder="e.g. skin clinic" required autocomplete="off">
+            <span class="hint">Tip: use how businesses actually name themselves — "skin clinic" beats "dermatologist".</span>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="pincode">Pincode</label>
+              <input type="text" id="pincode" name="pincode" placeholder="e.g. 400001" required autocomplete="off">
+            </div>
+            <div class="field field-narrow">
+              <label for="country">Country</label>
+              <input type="text" id="country" name="country" placeholder="IN" maxlength="2" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="radius">Search radius</label>
+              <select id="radius" name="radius">
+                <option value="3000">3 km</option>
+                <option value="5000" selected>5 km</option>
+                <option value="10000">10 km</option>
+                <option value="20000">20 km</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="limit">Max results</label>
+              <select id="limit" name="limit">
+                <option value="20">20</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="checkbox">
+            <input type="checkbox" id="fetch_instagram" name="fetch_instagram" checked>
+            <span>Try to find Instagram handles <em>(slower — visits each website)</em></span>
+          </label>
+
+          <button type="submit" id="submit-btn">
+            <span class="btn-label">Search</span>
+            <span class="btn-spinner" aria-hidden="true"></span>
+          </button>
+
+          <p id="error" class="error" hidden></p>
+        </form>
+      </section>
+
+      <section class="panel results-panel">
+        <div id="empty-state" class="empty-state">
+          <div class="empty-illustration" aria-hidden="true">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <p>Run a search to see results appear here — then export them to Excel in one click.</p>
+        </div>
+
+        <div id="results-state" class="results-state" hidden>
+          <div class="results-header">
+            <div>
+              <h2 id="results-title">Results</h2>
+              <p id="results-subtitle" class="results-subtitle"></p>
+            </div>
+            <a id="download-btn" class="download-btn" href="#" download>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Download Excel
+            </a>
+          </div>
+
+          <div class="table-wrap">
+            <table id="results-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Website</th>
+                  <th>Instagram</th>
+                  <th>Address</th>
+                  <th>Dist.</th>
+                </tr>
+              </thead>
+              <tbody id="results-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footnote">Data via TomTom Places. Website/Instagram availability depends on what businesses have listed.</footer>
+  </div>
+
+  <script>
+    const form = document.getElementById('search-form');
+    const btn = document.getElementById('submit-btn');
+    const errorEl = document.getElementById('error');
+    const emptyState = document.getElementById('empty-state');
+    const resultsState = document.getElementById('results-state');
+    const resultsBody = document.getElementById('results-body');
+    const resultsTitle = document.getElementById('results-title');
+    const resultsSubtitle = document.getElementById('results-subtitle');
+    const downloadBtn = document.getElementById('download-btn');
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str ?? '';
+      return div.innerHTML;
+    }
+
+    function cell(value, opts = {}) {
+      if (!value) return '<span class="muted">—</span>';
+      if (opts.href) {
+        return `<a href="${opts.href}" target="_blank" rel="noopener noreferrer">${escapeHtml(opts.label || value)}</a>`;
+      }
+      return escapeHtml(value);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      errorEl.hidden = true;
+
+      const payload = {
+        query: form.query.value.trim(),
+        pincode: form.pincode.value.trim(),
+        country: form.country.value.trim(),
+        radius: form.radius.value,
+        limit: form.limit.value,
+        fetch_instagram: form.fetch_instagram.checked,
+      };
+
+      try {
+        const resp = await fetch('/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          errorEl.textContent = data.error || 'Something went wrong.';
+          errorEl.hidden = false;
+          return;
+        }
+
+        emptyState.hidden = true;
+        resultsState.hidden = false;
+        resultsTitle.textContent = `${data.count} result${data.count === 1 ? '' : 's'} found`;
+        resultsSubtitle.textContent = data.area ? `near ${data.area}` : '';
+        downloadBtn.href = `/download/${data.download_id}`;
+
+        resultsBody.innerHTML = data.rows.map(r => `
+          <tr>
+            <td class="col-name">
+              ${escapeHtml(r.name)}
+              ${r.category ? `<span class="tag">${escapeHtml(r.category.split(',')[0])}</span>` : ''}
+            </td>
+            <td>${cell(r.phone, { href: r.phone ? `tel:${r.phone.replace(/\s+/g, '')}` : null })}</td>
+            <td>${cell(r.website, { href: r.website, label: r.website ? new URL(r.website).hostname.replace(/^www\./, '') : '' })}</td>
+            <td>${cell(r.instagram, { href: r.instagram ? `https://instagram.com/${r.instagram}` : null, label: r.instagram ? '@' + r.instagram : '' })}</td>
+            <td class="col-address">${escapeHtml(r.address)}</td>
+            <td>${r.distance !== '' ? r.distance + ' m' : '<span class="muted">—</span>'}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="6" class="muted center">No businesses matched — try a broader term or larger radius.</td></tr>`;
+      } catch (err) {
+        errorEl.textContent = 'Network error: ' + err.message;
+        errorEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+      }
+    });
+  </script>
+</body>
+</html>
